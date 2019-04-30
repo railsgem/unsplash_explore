@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:convert' as convert;
+import 'package:http/http.dart' as http;
+import 'package:cached_network_image/cached_network_image.dart';
+
 
 void main() => runApp(MyApp());
 
@@ -18,9 +22,9 @@ class MyApp extends StatelessWidget {
         // or simply save your changes to "hot reload" in a Flutter IDE).
         // Notice that the counter didn't reset back to zero; the application
         // is not restarted.
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.red
       ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(title: 'UnSplash Viwer'),
     );
   }
 }
@@ -44,18 +48,11 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  List items;
+  List data;
+  String lastItemId = 'uZH_r4I7law';
+  bool isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -71,41 +68,112 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.display1,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      body: _buildPaginatedListView(),
     );
+  }
+  Widget _buildPaginatedListView() {
+    return Column(
+      children: <Widget>[
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+              onNotification: (ScrollNotification scrollInfo) {
+                if (!isLoading && scrollInfo.metrics.pixels ==
+                    scrollInfo.metrics.maxScrollExtent) {
+                  this.getJSONData();
+                  // start loading data
+                  setState(() {
+                    isLoading = true;
+                  });
+                }
+              },
+          child: _buildListView(),
+          )
+        ),
+        Container(
+          height: isLoading ? 50.0 : 0,
+          color: Colors.white70,
+          child: Center(
+            child: new CircularProgressIndicator(),
+          ),
+        ),
+      ],
+    );
+  }
+  Widget _buildListView() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(0),
+      itemCount: data == null ? 0 : data.length,
+      itemBuilder: (context, index) {
+        return _buildImageColumn(data[index]);
+        // ListTile(title: Text("data"), subtitle: Text("likes: 1"),);
+      },
+    );
+  }
+
+  Widget _imagePlaceHolder() {
+    return Container(
+      height: 200,
+      child: SizedBox(height: 600,),
+    );
+  }
+  Widget _buildImageColumn(item) => Container(
+    decoration: BoxDecoration(
+      color: Colors.white
+    ),
+    margin: const EdgeInsets.only(bottom: 8.0),
+    child: Column(
+      children: <Widget>[
+        new CachedNetworkImage(
+            imageUrl: item['urls']['regular'],
+            placeholder: (context, url) => _imagePlaceHolder(),
+            // new CircularProgressIndicator(),
+            errorWidget: (context, url, error) => new Icon(Icons.error),
+        ),
+        ListTile(
+          leading: CircleAvatar(
+            backgroundImage: NetworkImage(item['user']['profile_image']['large']),
+          ),
+          title: Text(item['user']['name'], style: TextStyle(fontWeight: FontWeight.bold),), 
+          subtitle: Text('@' + item['user']['username']),
+          trailing: Icon(Icons.favorite_border),
+          ),
+      ],
+    ),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // call get json data function 
+    this.getJSONData();
+  }
+
+  Future<String> getJSONData()  async {
+    try {
+      var url = "https://unsplash.com/napi/photos/"+ lastItemId + "/related";
+
+      // Await the http get response, then decode the json-formatted responce.
+      var response = await http.get(url);
+      if (response.statusCode == 200) {
+        var jsonResponse = convert.jsonDecode(response.body);
+        setState(() {
+          List newItems = jsonResponse['results'];
+          if (data == null) {
+            data = newItems;
+          } else {
+            data.addAll( newItems);
+          }
+          lastItemId = data.last['id'];
+          isLoading = false;
+        });
+        print(data.toString());
+        print(lastItemId);
+        return "sucessful";
+      } else {
+        print("Request failed with status: ${response.statusCode}.");
+      }
+    } on Exception catch (error) {
+      debugPrint(error.toString());
+    }
   }
 }
