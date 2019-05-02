@@ -24,7 +24,7 @@ class MyApp extends StatelessWidget {
         // is not restarted.
         primarySwatch: Colors.red
       ),
-      home: MyHomePage(title: 'UnSplash Viwer'),
+      home: MyHomePage(title: 'UnSplash Daily'),
     );
   }
 }
